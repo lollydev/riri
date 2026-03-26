@@ -1,0 +1,330 @@
+html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Blue Flowers & Hearts — Tap me + Spotify</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.3/p5.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1320;
+      --btn-bg: rgba(20, 30, 48, 0.78);
+      --btn-bg-hover: rgba(34, 51, 82, 0.9);
+      --btn-border: rgba(255,255,255,0.18);
+      --btn-text: #eaf3ff;
+      --accent: #82b3ff;
+    }
+    html, body { margin:0; padding:0; background:var(--bg); height:100%; overflow:hidden; }
+    canvas { display:block; }
+
+    /* --- TAP ME overlay --- */
+    .tap-overlay {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(ellipse at center,
+                     rgba(11,19,32,0.95) 0%,
+                     rgba(11,19,32,0.85) 45%,
+                     rgba(11,19,32,0.55) 100%);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      z-index: 10;
+    }
+    .tap-card {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 22px;
+      border-radius: 16px;
+      border: 1px solid var(--btn-border);
+      background: var(--btn-bg);
+      color: var(--btn-text);
+      font: 700 18px/1.2 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      letter-spacing: 0.2px;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+      cursor: pointer;
+      user-select: none;
+      transition: background 160ms ease, transform 120ms ease, box-shadow 160ms ease;
+    }
+    .tap-card:hover { background: var(--btn-bg-hover); transform: translateY(-1px); }
+    .tap-card:active { transform: translateY(0); }
+    .tap-icon {
+      width: 22px; height: 22px; display:inline-block;
+      background: radial-gradient(circle at 30% 30%, #bfe0ff 0 35%, #4c8cff 36% 100%);
+      -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M3 22v-2h18v2H3Zm6-4.5L4 14V4l5 3 6-4v10l-6 4.5Z"/></svg>') center/contain no-repeat;
+              mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M3 22v-2h18v2H3Zm6-4.5L4 14V4l5 3 6-4v10l-6 4.5Z"/></svg>') center/contain no-repeat;
+    }
+
+    /* Spotify embed holder */
+    #spotifyEmbed {
+      display: none; /* hide until tap */
+      position: fixed; right: 12px; bottom: 12px; z-index: 9;
+      width: 320px; height: 152px; 
+      border-radius: 12px; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.18);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+    }
+
+    @media (max-width: 420px) {
+      #spotifyEmbed { width: 300px; height: 152px; right: 10px; bottom: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- TAP ME overlay -->
+<div id="tapOverlay" class="tap-overlay" role="dialog" aria-label="Tap to begin">
+  <div id="tapBtn" class="tap-card" role="button" tabindex="0" aria-pressed="false">
+    <span class="tap-icon" aria-hidden="true"></span>
+    <span>Tap me</span>
+  </div>
+</div>
+
+<!-- Spotify Embed: hidden until Tap -->
+<div id="spotifyEmbed">
+  <iframe
+    style="border:0; width:100%; height:100%;"
+    src="https://open.spotify.com/embed/track/78Sw5GDo6AlGwTwanjXbGh?theme=0"
+    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+    loading="lazy"
+    title="Spotify player: Here With Me — d4vd">
+  </iframe>
+</div>
+
+<script>
+  // TAP ME + SHOW SPOTIFY
+  const overlay = document.getElementById('tapOverlay');
+  const tapBtn = document.getElementById('tapBtn');
+  const spotify = document.getElementById('spotifyEmbed');
+
+  function handleTap() {
+    overlay.style.display = 'none';      // hide overlay
+    spotify.style.display = 'block';     // show Spotify embed
+  }
+
+  tapBtn.addEventListener('click', handleTap);
+  tapBtn.addEventListener('keyup', (e)=>{ if(e.key==='Enter'||e.key===' ') handleTap(); });
+</script>
+
+<script>
+/* ============================
+   Blue Flowers & Hearts Scene
+   ============================ */
+let hearts = [];
+let sparkles = [];
+
+const COLORS = {
+  bg: "#0b1320",
+  plantDark: "#0e2b1f",
+  plantLight: "#0f6d46",
+  flowerFill: "#5aa7ff",
+  flowerEdge: "#bfe0ff",
+  heartFill: "#4c8cff",
+  heartEdge: "#b4ceff",
+  glow: "rgba(89, 166, 255, 0.25)",
+  sparkle: "#ffee88"
+};
+
+function glow(x, y, r, col) {
+  noStroke();
+  for (let i = 4; i >= 1; i--) {
+    const a = 0.08 * i;
+    let c = col;
+    try { c = col.replace(/0\.\d+\)/, a + ")"); } catch(e) { c = `rgba(89,166,255,${a})`; }
+    fill(color(c));
+    ellipse(x, y, r * i);
+  }
+}
+
+function drawHeart(s) {
+  beginShape();
+  vertex(0, -0.3 * s);
+  bezierVertex(0.55 * s, -0.9 * s, 1.1 * s, -0.1 * s, 0, 0.7 * s);
+  bezierVertex(-1.1 * s, -0.1 * s, -0.55 * s, -0.9 * s, 0, -0.3 * s);
+  endShape(CLOSE);
+}
+
+function setup() {
+  createCanvas(window.innerWidth, window.innerHeight);
+  noStroke();
+
+  for (let i = 0; i < 22; i++) {
+    hearts.push({
+      x: random(width),
+      y: random(height * 0.35, height * 0.95),
+      s: random(10, 26),
+      vy: random(-0.4, -1.1),
+      swayAmp: random(10, 30),
+      swaySpd: random(0.003, 0.008),
+      t: random(1000)
+    });
+  }
+
+  for (let i = 0; i < 70; i++) {
+    sparkles.push({
+      x: random(width),
+      y: random(height),
+      a: random(0.1, 0.7),
+      r: random(1, 2.2),
+      tw: random(0.01, 0.04),
+      t: random(1000)
+    });
+  }
+}
+
+function draw() {
+  background(COLORS.bg);
+
+  // Small stars
+  for (const sp of sparkles) {
+    sp.t += sp.tw;
+    const a = sp.a * (0.6 + 0.4 * sin(sp.t));
+    noStroke();
+    fill(`rgba(255,255,255,${a})`);
+    circle(sp.x, sp.y, sp.r);
+  }
+
+  // Ground shadow
+  noStroke();
+  fill(0, 0, 0, 40);
+  ellipse(width * 0.5, height * 0.86, width * 0.35, 40);
+
+  // Plant + flowers + hearts
+  drawPlant(width * 0.5, height * 0.78);
+  drawFlowers(width * 0.5, height * 0.52);
+  drawHearts();
+}
+
+function drawPlant(cx, cy) {
+  push();
+  translate(cx, cy);
+
+  for (let i = 0; i < 11; i++) {
+    const a = map(i, 0, 10, -PI / 2.8, PI / 2.8);
+    const len = 90 + 18 * sin(i);
+    drawLeaf(a, len, i % 2 === 0 ? COLORS.plantLight : COLORS.plantDark, 0.74);
+  }
+
+  drawBlade(-220, -140, -PI / 10, 220);
+  drawBlade(220, -140, PI / 8, 210);
+
+  stroke(COLORS.plantLight);
+  strokeWeight(4);
+  for (let i = -2; i <= 2; i++) {
+    const x = i * 26;
+    line(x, 0, x * 0.7, -180 - Math.abs(i) * 18);
+  }
+  noStroke();
+
+  pop();
+}
+
+function drawBlade(x, y, ang, len) {
+  push();
+  translate(x, y);
+  rotate(ang);
+  const w = 26;
+  fill(COLORS.plantDark);
+  beginShape();
+  vertex(0, 0);
+  bezierVertex(w, -len * 0.2, w, -len * 0.8, 0, -len);
+  bezierVertex(-w, -len * 0.8, -w, -len * 0.2, 0, 0);
+  endShape(CLOSE);
+  pop();
+}
+
+function drawLeaf(ang, len, col, alpha = 1) {
+  push();
+  rotate(ang);
+  const c = color(col);
+  c.setAlpha(255 * alpha);
+  fill(c);
+  beginShape();
+  vertex(0, 0);
+  bezierVertex(22, -len * 0.25, 22, -len * 0.75, 0, -len);
+  bezierVertex(-22, -len * 0.75, -22, -len * 0.25, 0, 0);
+  endShape(CLOSE);
+  pop();
+}
+
+function drawFlowers(cx, topY) {
+  const positions = [
+    { x: 0, y: 0 },
+    { x: -60, y: 28 },
+    { x: 60, y: 28 },
+    { x: -30, y: 78 },
+    { x: 30, y: 78 },
+  ];
+  push();
+  translate(cx, topY);
+
+  for (const p of positions) {
+    push();
+    translate(p.x, p.y);
+    glow(0, 0, 46, COLORS.glow);
+
+    for (let i = 0; i < 6; i++) {
+      push();
+      rotate((TWO_PI / 6) * i);
+      drawPetal(28, 48);
+      pop();
+    }
+    noStroke();
+    fill("#d7f0ff");
+    circle(0, 0, 16);
+    pop();
+  }
+  pop();
+}
+
+function drawPetal(w, h) {
+  stroke(COLORS.flowerEdge);
+  strokeWeight(2);
+  fill(COLORS.flowerFill);
+  beginShape();
+  vertex(0, 0);
+  bezierVertex(w * 0.7, -h * 0.35, w * 0.7, -h * 0.85, 0, -h);
+  bezierVertex(-w * 0.7, -h * 0.85, -w * 0.7, -h * 0.35, 0, 0);
+  endShape(CLOSE);
+}
+
+function drawHearts() {
+  for (const h of hearts) {
+    h.t += h.swaySpd;
+    h.y += h.vy;
+    const sway = sin(h.t) * h.swayAmp;
+    const x = h.x + sway;
+
+    if (h.y < -40) {
+      h.y = height + random(20, 120);
+      h.x = random(width);
+      h.s = random(10, 26);
+    }
+
+    noFill();
+    stroke(COLORS.heartEdge);
+    strokeWeight(2);
+    circle(x, h.y, h.s * 2.1);
+
+    noStroke();
+    fill("rgba(76,140,255,0.15)");
+    circle(x, h.y, h.s * 3.5);
+
+    push();
+    translate(x, h.y);
+    rotate(sin(h.t * 0.9) * 0.2);
+    noStroke();
+    fill(COLORS.heartFill);
+    drawHeart(h.s);
+    pop();
+  }
+}
+
+function windowResized() { resizeCanvas(window.innerWidth, window.innerHeight); }
+</script>
+
+</body>
+</html>
